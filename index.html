@@ -1,0 +1,1746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Cisco ASA Tunnel Explorer</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2129;
+    --panel-2: #232c36;
+    --border: #2d3845;
+    --text: #d8e1ea;
+    --text-dim: #8a98a8;
+    --accent: #4ec9b0;
+    --accent-2: #569cd6;
+    --warn: #e5c07b;
+    --err: #e06c75;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  header {
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  header h1 span { color: var(--accent); }
+  header .sub {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    height: calc(100vh - 61px);
+  }
+  .pane {
+    background: var(--bg);
+    overflow: auto;
+    padding: 20px 24px;
+  }
+  .pane h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-dim);
+    margin: 0 0 12px;
+    font-weight: 600;
+  }
+  textarea {
+    width: 100%;
+    height: calc(100vh - 280px);
+    min-height: 300px;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    resize: vertical;
+    outline: none;
+  }
+  textarea:focus { border-color: var(--accent-2); }
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  input[type="text"] {
+    flex: 1;
+    min-width: 200px;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 9px 12px;
+    font-family: var(--mono);
+    font-size: 13px;
+    outline: none;
+  }
+  input[type="text"]:focus { border-color: var(--accent-2); }
+  button {
+    background: var(--accent);
+    color: #0f1419;
+    border: none;
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.85; }
+  button.secondary {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .hint {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .hint code {
+    background: var(--panel);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--accent);
+    font-size: 11.5px;
+  }
+  .summary {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .chip {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 11px;
+    font-size: 11.5px;
+    color: var(--text-dim);
+  }
+  .chip.match { color: var(--accent); border-color: var(--accent); }
+  .chip.warn { color: var(--warn); border-color: #4a3f28; }
+  .section {
+    margin-bottom: 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--panel);
+  }
+  .section-head {
+    padding: 10px 14px;
+    background: var(--panel-2);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .section-head:hover { background: #2a343f; }
+  .section-head .count {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+  .section-head .chev {
+    color: var(--text-dim);
+    transition: transform 0.15s;
+  }
+  .section.collapsed .chev { transform: rotate(-90deg); }
+  .section.collapsed .section-body { display: none; }
+  .section-body {
+    padding: 12px 14px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text);
+  }
+  .section-body .empty {
+    color: var(--text-dim);
+    font-style: italic;
+    font-family: -apple-system, sans-serif;
+  }
+  .block + .block { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+  .kw-cmd { color: var(--accent-2); }
+  .kw-name { color: var(--accent); }
+  .kw-num { color: var(--warn); }
+  .kw-comment { color: var(--text-dim); font-style: italic; }
+  .empty-state {
+    color: var(--text-dim);
+    text-align: center;
+    margin-top: 80px;
+    font-size: 13px;
+  }
+  .empty-state svg {
+    opacity: 0.3;
+    margin-bottom: 12px;
+  }
+  .error {
+    background: #3a1f24;
+    border: 1px solid #5a2a31;
+    color: var(--err);
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 14px;
+    font-size: 13px;
+  }
+  .pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .pane-header h2 { margin: 0; }
+  .toggle-btn {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .toggle-btn:hover { background: #2a343f; }
+  .toggle-btn.active { background: var(--accent); color: #0f1419; border-color: var(--accent); }
+  .ts-step {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .ts-title { font-weight: 600; color: var(--accent); margin-bottom: 4px; font-size: 13.5px; }
+  .ts-why { color: var(--text-dim); font-size: 12.5px; margin-bottom: 10px; line-height: 1.45; }
+  .ts-cmds {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+    margin-bottom: 10px;
+  }
+  .ts-cmd {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: 3px;
+    color: var(--text);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .ts-cmd:hover { background: var(--panel-2); }
+  .ts-cmd .copy-ind { opacity: 0.3; font-size: 11px; }
+  .ts-cmd:hover .copy-ind { opacity: 0.8; }
+  .ts-cmd.copied .copy-ind { opacity: 1; color: var(--accent); }
+  .ts-cmd.unfilled { color: var(--warn); }
+  .ts-expect {
+    font-size: 12.5px;
+    color: var(--text);
+    margin-bottom: 8px;
+    padding: 6px 10px;
+    background: rgba(78, 201, 176, 0.06);
+    border-left: 2px solid var(--accent);
+    border-radius: 2px;
+  }
+  .ts-expect strong { color: var(--accent); }
+  .ts-issues { font-size: 12.5px; color: var(--text-dim); }
+  .ts-issues strong { color: var(--err); display: block; margin-bottom: 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .ts-issues ul { margin: 0; padding-left: 18px; }
+  .ts-issues li { margin-bottom: 4px; line-height: 1.5; }
+  .ts-issues code { background: var(--bg); padding: 1px 5px; border-radius: 3px; color: var(--warn); font-size: 11.5px; }
+  .ts-fill-btn {
+    background: var(--accent-2);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11.5px;
+    cursor: pointer;
+    margin-left: 8px;
+  }
+  .ts-fill-btn:hover { opacity: 0.85; }
+  .diagram-wrap {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .diagram-wrap svg { width: 100%; height: auto; max-width: 720px; display: block; margin: 0 auto; }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border);
+    font-size: 12px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; color: var(--text-dim); }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--border); }
+  .config-sample {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 18px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .cfg-section {
+    color: var(--accent);
+    font-weight: 600;
+    display: block;
+    margin-top: 14px;
+    margin-bottom: 2px;
+  }
+  .cfg-section:first-child { margin-top: 0; }
+  .cfg-comment { color: var(--text-dim); font-style: italic; }
+  .cfg-link { color: var(--warn); }
+  .cfg-keyword { color: var(--accent-2); }
+  .cfg-name { color: #c586c0; }
+  .cat-gray   { background: #5F5E5A; }
+  .cat-teal   { background: #1D9E75; }
+  .cat-coral  { background: #D85A30; }
+  .cat-purple { background: #7F77DD; }
+  .cat-pink   { background: #D4537E; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Cisco ASA <span>Tunnel Explorer</span></h1>
+    <div class="sub">Paste a running-config, search by peer IP or tunnel-group name</div>
+  </div>
+  <div class="sub">All parsing happens locally in your browser</div>
+</header>
+<main>
+  <section class="pane">
+    <h2>Configuration Input</h2>
+    <textarea id="config" placeholder="Paste your 'show running-config' output here…
+e.g.:
+tunnel-group 203.0.113.5 type ipsec-l2l
+tunnel-group 203.0.113.5 ipsec-attributes
+ ikev2 remote-authentication pre-shared-key REDACTED
+ ikev2 local-authentication pre-shared-key REDACTED
+crypto map OUTSIDE_MAP 10 match address VPN_ACL
+crypto map OUTSIDE_MAP 10 set peer 203.0.113.5
+crypto map OUTSIDE_MAP 10 set ikev2 ipsec-proposal AES256
+access-list VPN_ACL extended permit ip object LOCAL_NET object REMOTE_NET
+…"></textarea>
+    <div class="controls">
+      <input type="text" id="anchor" placeholder="Peer IP (e.g. 203.0.113.5) or tunnel-group name" />
+      <button onclick="analyze()">Analyze</button>
+      <button class="secondary" onclick="document.getElementById('fileInput').click()">Load File</button>
+      <input type="file" id="fileInput" accept=".txt,.cfg,.log,.conf" style="display:none" onchange="loadFile(event)" />
+      <button class="secondary" onclick="listAllTunnels()">List All Tunnels</button>
+      <button class="secondary" onclick="loadDemo()">Demo</button>
+      <button class="secondary" onclick="exportResult()">Export</button>
+    </div>
+    <div class="hint">
+      Tip: anchor by the <code>peer IP</code> for site-to-site tunnels, or by <code>tunnel-group name</code> for remote-access groups. For large configs (&gt;1MB) use <strong>Load File</strong> or drag a file onto this pane instead of pasting.
+    </div>
+    <div id="fileStatus" class="hint" style="margin-top:6px"></div>
+  </section>
+
+  <section class="pane">
+    <div class="pane-header">
+      <h2>Output</h2>
+      <div style="display:flex;gap:8px">
+        <button class="toggle-btn" id="diagToggle" onclick="toggleDiagram()">Show Component Diagram</button>
+        <button class="toggle-btn" id="tsToggle" onclick="toggleTroubleshooting()">Show Troubleshooting Steps</button>
+        <button class="toggle-btn" id="opsToggle" onclick="toggleOpsCommands()">Show Operational Commands</button>
+      </div>
+    </div>
+    <div id="results">
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="11" cy="11" r="7"/>
+          <path d="m21 21-4.3-4.3"/>
+        </svg>
+        <div>Paste a config and enter a peer IP or tunnel-group name to see all related sections.</div>
+      </div>
+    </div>
+    <div id="componentDiagram" style="display:none;margin-top:24px"></div>
+    <div id="troubleshooting" style="display:none;margin-top:24px"></div>
+    <div id="opsCommands" style="display:none;margin-top:24px"></div>
+  </section>
+</main>
+
+<script>
+// ---------- Parser ----------
+function parseConfig(text) {
+  const lines = text.split(/\r?\n/);
+  const blocks = [];
+  let current = null;
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    if (/^\s*!/.test(line)) continue;
+    if (/^[ \t]/.test(line)) {
+      if (current) {
+        current.children.push(line);
+        current.raw.push(line);
+      }
+    } else {
+      if (current) blocks.push(current);
+      current = { header: line, children: [], raw: [line] };
+    }
+  }
+  if (current) blocks.push(current);
+  return blocks;
+}
+
+function indexBlocks(blocks) {
+  const idx = {
+    tunnelGroups: {}, groupPolicies: {},
+    cryptoMaps: {}, cryptoMapIfaces: {},
+    accessLists: {},
+    objNetwork: {}, objService: {},
+    ogNetwork: {}, ogService: {},
+    nats: [], routes: [],
+    ikev1Policies: [], ikev2Policies: [],
+    transformSets: {}, ipsecProposals: {},
+    aaaServerGroups: {},
+    nameAliases: {},      // alias -> IP   (from "name 1.2.3.4 ALIAS")
+    nameAliasesRev: {},   // IP -> alias
+  };
+
+  // First pass: collect "name <ip> <alias>" mappings — must happen before crypto-map peer parsing
+  for (const b of blocks) {
+    const m = b.header.trim().match(/^name\s+(\d{1,3}(?:\.\d{1,3}){3})\s+(\S+)/);
+    if (m) { idx.nameAliases[m[2]] = m[1]; idx.nameAliasesRev[m[1]] = m[2]; }
+  }
+  const resolveName = s => idx.nameAliases[s] || s;
+
+  for (const b of blocks) {
+    const h = b.header.trim();
+    let m;
+    if ((m = h.match(/^tunnel-group\s+(\S+)/))) {
+      (idx.tunnelGroups[m[1]] ||= []).push(b);
+    } else if ((m = h.match(/^group-policy\s+(\S+)/))) {
+      (idx.groupPolicies[m[1]] ||= []).push(b);
+    } else if ((m = h.match(/^crypto map\s+(\S+)\s+(\d+)\s+(.*)/))) {
+      const name = m[1], seq = m[2], rest = m[3];
+      idx.cryptoMaps[name] ||= {};
+      const entry = idx.cryptoMaps[name][seq] ||= { blocks: [], peer: null, acl: null, transforms: [], proposals: [] };
+      entry.blocks.push(b);
+      let mm;
+      if ((mm = rest.match(/^set peer\s+(.+)/))) entry.peer = resolveName(mm[1].trim().split(/\s+/)[0]);
+      else if ((mm = rest.match(/^match address\s+(\S+)/))) entry.acl = mm[1];
+      else if ((mm = rest.match(/^set (?:ikev1\s+)?transform-set\s+(.+)/))) entry.transforms.push(...mm[1].trim().split(/\s+/));
+      else if ((mm = rest.match(/^set ikev2\s+ipsec-proposal\s+(.+)/))) entry.proposals.push(...mm[1].trim().split(/\s+/));
+    } else if ((m = h.match(/^crypto map\s+(\S+)\s+interface\s+(\S+)/))) {
+      idx.cryptoMapIfaces[m[1]] = { line: h, iface: m[2], block: b };
+    } else if ((m = h.match(/^access-list\s+(\S+)/))) {
+      (idx.accessLists[m[1]] ||= []).push(b);
+    } else if ((m = h.match(/^object network\s+(\S+)/))) {
+      idx.objNetwork[m[1]] = b;
+    } else if ((m = h.match(/^object service\s+(\S+)/))) {
+      idx.objService[m[1]] = b;
+    } else if ((m = h.match(/^object-group network\s+(\S+)/))) {
+      idx.ogNetwork[m[1]] = b;
+    } else if ((m = h.match(/^object-group service\s+(\S+)/))) {
+      idx.ogService[m[1]] = b;
+    } else if (/^nat\b|^nat\s*\(/.test(h)) {
+      idx.nats.push(b);
+    } else if (/^route\s+/.test(h)) {
+      idx.routes.push(b);
+    } else if (/^crypto ikev1 policy/.test(h)) {
+      idx.ikev1Policies.push(b);
+    } else if (/^crypto ikev2 policy/.test(h)) {
+      idx.ikev2Policies.push(b);
+    } else if ((m = h.match(/^crypto ipsec ikev[12]\s+transform-set\s+(\S+)/))) {
+      idx.transformSets[m[1]] = b;
+    } else if ((m = h.match(/^crypto ipsec ikev2\s+ipsec-proposal\s+(\S+)/))) {
+      idx.ipsecProposals[m[1]] = b;
+    } else if ((m = h.match(/^aaa-server\s+(\S+)/))) {
+      (idx.aaaServerGroups[m[1]] ||= []).push(b);
+    }
+  }
+  return idx;
+}
+
+// ---------- Resolver ----------
+function resolveTunnel(idx, anchorIn) {
+  // Allow user to search by 'name' alias too
+  const anchor = idx.nameAliases[anchorIn] || anchorIn;
+  const result = {
+    anchor,
+    tgName: null,
+    tunnelGroup: [],
+    groupPolicy: [],
+    groupPolicyNames: [],
+    cryptoMapEntries: [],
+    cryptoMapIface: [],
+    accessList: [],
+    aclNames: [],
+    objects: {},
+    objectGroups: {},
+    nats: [],
+    routes: [],
+    ikePolicies: [],
+    transformSets: {},
+    ipsecProposals: {},
+    aaaServers: [],
+    notes: [],
+  };
+
+  // Find tunnel-group: direct name match, or by peer IP (L2L tg is named by IP)
+  let tgName = idx.tunnelGroups[anchor] ? anchor : null;
+
+  // Find crypto map entries with set peer = anchor
+  const cmHits = [];
+  for (const [name, seqs] of Object.entries(idx.cryptoMaps)) {
+    for (const [seq, entry] of Object.entries(seqs)) {
+      if (entry.peer && entry.peer === anchor) cmHits.push({ name, seq, entry });
+    }
+  }
+
+  if (!tgName && cmHits.length) {
+    const peer = cmHits[0].entry.peer;
+    if (idx.tunnelGroups[peer]) tgName = peer;
+  }
+
+  // If anchor is a tg name (not IP), try to find crypto map by also looking at tg type or just leave
+  if (tgName) {
+    result.tgName = tgName;
+    result.tunnelGroup = idx.tunnelGroups[tgName] || [];
+    for (const b of result.tunnelGroup) {
+      for (const ch of b.children) {
+        const m = ch.match(/default-group-policy\s+(\S+)/);
+        if (m) {
+          if (!result.groupPolicyNames.includes(m[1])) {
+            result.groupPolicyNames.push(m[1]);
+            if (idx.groupPolicies[m[1]]) result.groupPolicy.push(...idx.groupPolicies[m[1]]);
+          }
+        }
+        const aa = ch.match(/authentication-server-group\s+(\S+)/);
+        if (aa && idx.aaaServerGroups[aa[1]]) result.aaaServers.push(...idx.aaaServerGroups[aa[1]]);
+      }
+    }
+  } else if (cmHits.length === 0) {
+    result.notes.push(`No tunnel-group named "${anchor}" and no crypto map entry with set peer ${anchor} found.`);
+  }
+
+  const aclSet = new Set();
+  for (const { name, seq, entry } of cmHits) {
+    const all = idx.cryptoMaps[name][seq];
+    result.cryptoMapEntries.push(...all.blocks);
+    if (all.acl) aclSet.add(all.acl);
+    for (const t of all.transforms) if (idx.transformSets[t]) result.transformSets[t] = idx.transformSets[t];
+    for (const p of all.proposals) if (idx.ipsecProposals[p]) result.ipsecProposals[p] = idx.ipsecProposals[p];
+    if (idx.cryptoMapIfaces[name]) {
+      const block = idx.cryptoMapIfaces[name].block;
+      if (!result.cryptoMapIface.includes(block)) result.cryptoMapIface.push(block);
+    }
+  }
+  // Also include any other entries on the same crypto map seq (match address etc) — already done via blocks
+
+  result.aclNames = Array.from(aclSet);
+
+  const refObjs = new Set();
+  const refOgs = new Set();
+  for (const acl of aclSet) {
+    const aclBlocks = idx.accessLists[acl] || [];
+    result.accessList.push(...aclBlocks);
+    for (const b of aclBlocks) {
+      const toks = b.header.split(/\s+/);
+      for (let i = 0; i < toks.length; i++) {
+        if (toks[i] === 'object' && toks[i + 1]) refObjs.add(toks[i + 1]);
+        if (toks[i] === 'object-group' && toks[i + 1]) refOgs.add(toks[i + 1]);
+      }
+    }
+  }
+
+  // Recursively expand object-groups
+  const queue = [...refOgs];
+  while (queue.length) {
+    const g = queue.pop();
+    if (result.objectGroups[g]) continue;
+    const gb = idx.ogNetwork[g] || idx.ogService[g];
+    if (!gb) continue;
+    result.objectGroups[g] = gb;
+    for (const ch of gb.children) {
+      const toks = ch.trim().split(/\s+/);
+      for (let i = 0; i < toks.length; i++) {
+        if ((toks[i] === 'network-object' || toks[i] === 'service-object') && toks[i + 1] === 'object' && toks[i + 2]) {
+          refObjs.add(toks[i + 2]);
+        } else if (toks[i] === 'group-object' && toks[i + 1]) {
+          queue.push(toks[i + 1]);
+        }
+      }
+    }
+  }
+
+  for (const o of refObjs) {
+    const ob = idx.objNetwork[o] || idx.objService[o];
+    if (ob) result.objects[o] = ob;
+  }
+
+  // NAT lines referencing objects/groups
+  const nameSet = new Set([...refObjs, ...refOgs]);
+  for (const nb of idx.nats) {
+    const toks = nb.header.split(/\s+/);
+    if (toks.some(t => nameSet.has(t))) result.nats.push(nb);
+  }
+  // object NAT (nat inside an "object network" block)
+  for (const oName of Object.keys(result.objects)) {
+    const ob = result.objects[oName];
+    for (const ch of ob.children) {
+      if (/^\s*nat\s*\(/.test(ch)) {
+        // already part of the object block display
+      }
+    }
+  }
+
+  // Routes touching the peer IP or remote subnets from the ACL
+  const ipsOfInterest = new Set();
+  if (anchor) ipsOfInterest.add(anchor);
+  // Collect remote subnets from ACL lines (very rough — looks for IP-looking tokens)
+  for (const b of result.accessList) {
+    const ips = b.header.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g) || [];
+    for (const ip of ips) ipsOfInterest.add(ip);
+  }
+  for (const rb of idx.routes) {
+    const ips = rb.header.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g) || [];
+    if (ips.some(ip => ipsOfInterest.has(ip))) result.routes.push(rb);
+  }
+
+  // IKE policies — include all (no clean way to know which one was negotiated from config alone)
+  result.ikePolicies = [...idx.ikev1Policies, ...idx.ikev2Policies];
+
+  return result;
+}
+
+// ---------- Renderer ----------
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function renderBlock(b) {
+  return b.raw.map(escapeHtml).join('\n');
+}
+
+function renderBlocks(blocks) {
+  if (!blocks || !blocks.length) return '<span class="empty">— none found —</span>';
+  return blocks.map(b => `<div class="block">${renderBlock(b)}</div>`).join('');
+}
+
+function renderRawLines(lines) {
+  if (!lines || !lines.length) return '<span class="empty">— none found —</span>';
+  return lines.map(escapeHtml).join('\n');
+}
+
+function section(title, count, content, openByDefault = true) {
+  return `
+    <div class="section ${openByDefault ? '' : 'collapsed'}">
+      <div class="section-head" onclick="this.parentElement.classList.toggle('collapsed')">
+        <span>${title} <span class="count">${count}</span></span>
+        <span class="chev">▾</span>
+      </div>
+      <div class="section-body">${content}</div>
+    </div>`;
+}
+
+let lastResult = null;
+
+function analyze() {
+  const text = loadedConfigText || document.getElementById('config').value;
+  const anchor = document.getElementById('anchor').value.trim();
+  const out = document.getElementById('results');
+
+  if (!text || !text.trim()) {
+    out.innerHTML = '<h2>Related Configuration</h2><div class="error">Please paste a configuration or load a file first.</div>';
+    return;
+  }
+  if (!anchor) {
+    out.innerHTML = '<h2>Related Configuration</h2><div class="error">Please enter a peer IP or tunnel-group name.</div>';
+    return;
+  }
+
+  out.innerHTML = '<h2>Related Configuration</h2><div class="hint">Parsing…</div>';
+
+  // Defer so the "Parsing…" message paints before we block on parse
+  setTimeout(() => {
+    let blocks, idx, res, t0 = performance.now();
+    try {
+      blocks = parseConfig(text);
+      idx = indexBlocks(blocks);
+      res = resolveTunnel(idx, anchor);
+      lastResult = { anchor, res };
+    } catch (e) {
+      out.innerHTML = `<h2>Related Configuration</h2><div class="error">Parse error: ${escapeHtml(e.message)}</div>`;
+      return;
+    }
+    const elapsed = (performance.now() - t0).toFixed(0);
+
+    const chips = [];
+    if (res.tgName) chips.push(`<span class="chip match">tunnel-group ${escapeHtml(res.tgName)}</span>`);
+    if (res.cryptoMapEntries.length) chips.push(`<span class="chip match">${res.cryptoMapEntries.length} crypto map line(s)</span>`);
+    if (res.aclNames.length) chips.push(`<span class="chip match">ACL: ${res.aclNames.map(escapeHtml).join(', ')}</span>`);
+    if (res.groupPolicyNames.length) chips.push(`<span class="chip match">policy: ${res.groupPolicyNames.map(escapeHtml).join(', ')}</span>`);
+    if (!chips.length) chips.push(`<span class="chip warn">no matches found for "${escapeHtml(anchor)}"</span>`);
+    chips.push(`<span class="chip">parsed ${blocks.length.toLocaleString()} blocks in ${elapsed} ms</span>`);
+
+    let notesHtml = '';
+    if (res.notes.length) notesHtml = `<div class="error">${res.notes.map(escapeHtml).join('<br>')}</div>`;
+
+    const cmIfaceLines = res.cryptoMapIface.map(b => b.header);
+
+    out.innerHTML = `
+      <h2>Related Configuration · anchor: ${escapeHtml(anchor)}</h2>
+      <div class="summary">${chips.join('')}</div>
+      ${notesHtml}
+      ${section('Tunnel Group', res.tunnelGroup.length, renderBlocks(res.tunnelGroup))}
+      ${section('Group Policy', res.groupPolicy.length, renderBlocks(res.groupPolicy))}
+      ${section('Crypto Map Entries', res.cryptoMapEntries.length, renderBlocks(res.cryptoMapEntries))}
+      ${section('Crypto Map Interface Binding', cmIfaceLines.length, renderRawLines(cmIfaceLines))}
+      ${section('Access-List (interesting traffic)', res.accessList.length, renderBlocks(res.accessList))}
+      ${section('Object-Groups', Object.keys(res.objectGroups).length, renderBlocks(Object.values(res.objectGroups)))}
+      ${section('Objects', Object.keys(res.objects).length, renderBlocks(Object.values(res.objects)))}
+      ${section('NAT (referencing related objects)', res.nats.length, renderBlocks(res.nats))}
+      ${section('Routes (toward peer / remote subnets)', res.routes.length, renderBlocks(res.routes))}
+      ${section('IPsec Transform-Sets (referenced)', Object.keys(res.transformSets).length, renderBlocks(Object.values(res.transformSets)))}
+      ${section('IKEv2 IPsec Proposals (referenced)', Object.keys(res.ipsecProposals).length, renderBlocks(Object.values(res.ipsecProposals)))}
+      ${section('IKE Policies (all — review which applies)', res.ikePolicies.length, renderBlocks(res.ikePolicies), false)}
+      ${section('AAA Server Groups (if used)', res.aaaServers.length, renderBlocks(res.aaaServers), false)}
+    `;
+    // Refresh playbook if it's currently visible
+    const ts = document.getElementById('troubleshooting');
+    if (ts && ts.style.display !== 'none') {
+      renderPlaybook(buildContext(lastResult));
+    }
+  }, 20);
+}
+
+function listAllTunnels() {
+  const text = loadedConfigText || document.getElementById('config').value;
+  const out = document.getElementById('results');
+  if (!text || !text.trim()) {
+    out.innerHTML = '<h2>Tunnel Inventory</h2><div class="error">Load a config first.</div>';
+    return;
+  }
+  out.innerHTML = '<h2>Tunnel Inventory</h2><div class="hint">Building inventory…</div>';
+  setTimeout(() => {
+    const t0 = performance.now();
+    const blocks = parseConfig(text);
+    const idx = indexBlocks(blocks);
+    const rows = [];
+    for (const [mapName, seqs] of Object.entries(idx.cryptoMaps)) {
+      const iface = (idx.cryptoMapIfaces[mapName] || {}).iface || '?';
+      for (const [seq, e] of Object.entries(seqs)) {
+        if (!e.peer) continue;
+        const tg = !!idx.tunnelGroups[e.peer];
+        let psk = false, gp = '-';
+        if (tg) {
+          for (const tb of idx.tunnelGroups[e.peer]) {
+            for (const ch of tb.children) {
+              if (ch.includes('pre-shared-key')) psk = true;
+              const mm = ch.match(/default-group-policy\s+(\S+)/);
+              if (mm) gp = mm[1];
+            }
+          }
+        }
+        const ike = e.proposals.length ? 'IKEv2' : (e.transforms.length ? 'IKEv1' : '?');
+        const crypto = (e.proposals[0] || e.transforms[0] || '-');
+        const aclN = (idx.accessLists[e.acl] || []).length;
+        const alias = idx.nameAliasesRev[e.peer] || '';
+        rows.push({ peer: e.peer, alias, map: mapName, seq: parseInt(seq, 10), iface, ike, tg, psk, gp, acl: e.acl || '-', aclN, crypto });
+      }
+    }
+    rows.sort((a, b) => a.map.localeCompare(b.map) || a.seq - b.seq);
+    const v1 = rows.filter(r => r.ike === 'IKEv1').length;
+    const v2 = rows.filter(r => r.ike === 'IKEv2').length;
+    const noTg = rows.filter(r => !r.tg).length;
+    const elapsed = (performance.now() - t0).toFixed(0);
+
+    let html = `<h2>Tunnel Inventory · ${rows.length} entries</h2>
+      <div class="summary">
+        <span class="chip match">IKEv2: ${v2}</span>
+        <span class="chip">IKEv1: ${v1}</span>
+        ${noTg ? `<span class="chip warn">${noTg} without tunnel-group</span>` : ''}
+        <span class="chip">${elapsed} ms</span>
+      </div>
+      <div style="overflow:auto">
+      <table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px">
+        <thead><tr style="text-align:left;color:var(--text-dim);border-bottom:1px solid var(--border)">
+          <th style="padding:6px 8px">Peer</th><th>Map/Seq</th><th>Iface</th><th>IKE</th><th>TG</th><th>PSK</th><th>ACL</th><th>#</th><th>Crypto</th><th>Policy</th><th></th>
+        </tr></thead><tbody>`;
+    for (const r of rows) {
+      const peerCell = r.alias ? `${escapeHtml(r.peer)} <span style="color:var(--text-dim)">(${escapeHtml(r.alias)})</span>` : escapeHtml(r.peer);
+      html += `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:5px 8px">${peerCell}</td>
+        <td>${escapeHtml(r.map)}/${r.seq}</td>
+        <td>${escapeHtml(r.iface)}</td>
+        <td style="color:${r.ike==='IKEv2'?'var(--accent)':'var(--warn)'}">${r.ike}</td>
+        <td style="color:${r.tg?'var(--accent)':'var(--err)'}">${r.tg?'✓':'✗'}</td>
+        <td>${r.psk?'✓':'-'}</td>
+        <td>${escapeHtml(r.acl)}</td>
+        <td>${r.aclN}</td>
+        <td>${escapeHtml(r.crypto)}</td>
+        <td>${escapeHtml(r.gp)}</td>
+        <td><a href="#" onclick="document.getElementById('anchor').value='${r.peer}';analyze();return false" style="color:var(--accent-2)">drill in</a></td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+    out.innerHTML = html;
+  }, 20);
+}
+
+function exportResult() {
+  if (!lastResult) { alert('Run an analysis first.'); return; }
+  const { anchor, res } = lastResult;
+  const parts = [];
+  const dump = (title, blocks) => {
+    parts.push(`! ===== ${title} =====`);
+    if (!blocks.length) { parts.push('! (none)'); return; }
+    for (const b of blocks) parts.push(b.raw.join('\n'));
+  };
+  parts.push(`! ASA Tunnel Explorer — anchor: ${anchor}`);
+  parts.push(`! Generated ${new Date().toISOString()}`);
+  parts.push('');
+  dump('Tunnel Group', res.tunnelGroup);
+  dump('Group Policy', res.groupPolicy);
+  dump('Crypto Map Entries', res.cryptoMapEntries);
+  dump('Crypto Map Interface Binding', res.cryptoMapIface);
+  dump('Access-List', res.accessList);
+  dump('Object-Groups', Object.values(res.objectGroups));
+  dump('Objects', Object.values(res.objects));
+  dump('NAT', res.nats);
+  dump('Routes', res.routes);
+  dump('Transform-Sets', Object.values(res.transformSets));
+  dump('IPsec Proposals', Object.values(res.ipsecProposals));
+  dump('IKE Policies', res.ikePolicies);
+  dump('AAA Server Groups', res.aaaServers);
+
+  const blob = new Blob([parts.join('\n') + '\n'], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `asa-tunnel-${anchor.replace(/[^\w.-]/g, '_')}.txt`;
+  a.click();
+}
+
+function loadDemo() {
+  document.getElementById('config').value = DEMO;
+  document.getElementById('anchor').value = '203.0.113.5';
+}
+
+const DEMO = `!
+hostname ASA-EDGE
+!
+interface GigabitEthernet0/0
+ nameif outside
+ ip address 198.51.100.10 255.255.255.0
+!
+object network LOCAL_NET
+ subnet 10.10.0.0 255.255.0.0
+object network REMOTE_NET
+ subnet 192.168.50.0 255.255.255.0
+object network REMOTE_NET2
+ subnet 192.168.60.0 255.255.255.0
+!
+object-group network REMOTE_SUBNETS
+ network-object object REMOTE_NET
+ network-object object REMOTE_NET2
+!
+access-list VPN_ACL_PEER1 extended permit ip object LOCAL_NET object-group REMOTE_SUBNETS
+access-list VPN_ACL_PEER2 extended permit ip 10.20.0.0 255.255.255.0 192.168.99.0 255.255.255.0
+!
+nat (inside,outside) source static LOCAL_NET LOCAL_NET destination static REMOTE_SUBNETS REMOTE_SUBNETS no-proxy-arp route-lookup
+!
+crypto ipsec ikev2 ipsec-proposal AES256
+ protocol esp encryption aes-256
+ protocol esp integrity sha-256
+crypto ipsec ikev1 transform-set ESP-AES-SHA esp-aes esp-sha-hmac
+!
+crypto map OUTSIDE_MAP 10 match address VPN_ACL_PEER1
+crypto map OUTSIDE_MAP 10 set peer 203.0.113.5
+crypto map OUTSIDE_MAP 10 set ikev2 ipsec-proposal AES256
+crypto map OUTSIDE_MAP 10 set security-association lifetime seconds 28800
+crypto map OUTSIDE_MAP 20 match address VPN_ACL_PEER2
+crypto map OUTSIDE_MAP 20 set peer 203.0.113.99
+crypto map OUTSIDE_MAP 20 set ikev1 transform-set ESP-AES-SHA
+crypto map OUTSIDE_MAP interface outside
+!
+crypto ikev2 policy 10
+ encryption aes-256
+ integrity sha256
+ group 14
+ prf sha256
+ lifetime seconds 86400
+!
+crypto ikev1 policy 10
+ authentication pre-share
+ encryption aes
+ hash sha
+ group 2
+ lifetime 86400
+!
+group-policy GP_PEER1 internal
+group-policy GP_PEER1 attributes
+ vpn-tunnel-protocol ikev2
+!
+tunnel-group 203.0.113.5 type ipsec-l2l
+tunnel-group 203.0.113.5 general-attributes
+ default-group-policy GP_PEER1
+tunnel-group 203.0.113.5 ipsec-attributes
+ ikev2 remote-authentication pre-shared-key REDACTED_PSK
+ ikev2 local-authentication pre-shared-key REDACTED_PSK
+!
+tunnel-group 203.0.113.99 type ipsec-l2l
+tunnel-group 203.0.113.99 ipsec-attributes
+ ikev1 pre-shared-key REDACTED_PSK_2
+!
+route outside 192.168.50.0 255.255.255.0 198.51.100.1 1
+route outside 192.168.60.0 255.255.255.0 198.51.100.1 1
+!`;
+
+// ---------- Component Diagram + Sample Config ----------
+const COMPONENT_DIAGRAM_SVG = `
+<svg viewBox="0 0 680 460" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="dgArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#8a98a8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Physical interface (gray) -->
+  <rect x="180" y="30" width="320" height="56" rx="8" fill="#444441" stroke="#B4B2A9" stroke-width="0.6"/>
+  <text x="340" y="48" text-anchor="middle" dominant-baseline="central" fill="#D3D1C7" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14" font-weight="500">Physical interface</text>
+  <text x="340" y="66" text-anchor="middle" dominant-baseline="central" fill="#B4B2A9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12">GigabitEthernet0/0  ·  nameif outside</text>
+
+  <line x1="340" y1="90" x2="340" y2="134" stroke="#8a98a8" stroke-width="1.2" marker-end="url(#dgArrow)"/>
+  <text x="350" y="112" dominant-baseline="central" fill="#8a98a8" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12" font-style="italic">crypto map ... interface outside</text>
+
+  <!-- Crypto map entry (teal) -->
+  <rect x="140" y="140" width="400" height="60" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.6"/>
+  <text x="340" y="160" text-anchor="middle" dominant-baseline="central" fill="#9FE1CB" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14" font-weight="500">Crypto map entry</text>
+  <text x="340" y="180" text-anchor="middle" dominant-baseline="central" fill="#5DCAA5" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12">outside_map 10  ·  one sequence per tunnel</text>
+
+  <!-- Three-way fan -->
+  <path d="M 340 200 V 226 H 130 V 250" fill="none" stroke="#8a98a8" stroke-width="1.2" marker-end="url(#dgArrow)"/>
+  <line x1="340" y1="200" x2="340" y2="250" stroke="#8a98a8" stroke-width="1.2" marker-end="url(#dgArrow)"/>
+  <path d="M 340 200 V 226 H 550 V 250" fill="none" stroke="#8a98a8" stroke-width="1.2" marker-end="url(#dgArrow)"/>
+
+  <!-- Access-list (coral) -->
+  <rect x="40" y="260" width="180" height="56" rx="8" fill="#712B13" stroke="#F0997B" stroke-width="0.6"/>
+  <text x="130" y="278" text-anchor="middle" dominant-baseline="central" fill="#F5C4B3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14" font-weight="500">Access-list</text>
+  <text x="130" y="296" text-anchor="middle" dominant-baseline="central" fill="#F0997B" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12">linked: match address</text>
+
+  <!-- Tunnel-group (purple) -->
+  <rect x="250" y="260" width="180" height="56" rx="8" fill="#3C3489" stroke="#AFA9EC" stroke-width="0.6"/>
+  <text x="340" y="278" text-anchor="middle" dominant-baseline="central" fill="#CECBF6" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14" font-weight="500">Tunnel-group</text>
+  <text x="340" y="296" text-anchor="middle" dominant-baseline="central" fill="#AFA9EC" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12">linked: set peer (IP)</text>
+
+  <!-- IPsec proposal (pink) -->
+  <rect x="460" y="260" width="180" height="56" rx="8" fill="#72243E" stroke="#ED93B1" stroke-width="0.6"/>
+  <text x="550" y="278" text-anchor="middle" dominant-baseline="central" fill="#F4C0D1" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14" font-weight="500">IPsec proposal</text>
+  <text x="550" y="296" text-anchor="middle" dominant-baseline="central" fill="#ED93B1" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12">linked: set ipsec-proposal</text>
+
+  <line x1="130" y1="316" x2="130" y2="358" stroke="#8a98a8" stroke-width="1.2" marker-end="url(#dgArrow)"/>
+  <line x1="340" y1="316" x2="340" y2="358" stroke="#8a98a8" stroke-width="1.2" marker-end="url(#dgArrow)"/>
+
+  <!-- Network objects -->
+  <rect x="40" y="364" width="180" height="56" rx="8" fill="#712B13" stroke="#F0997B" stroke-width="0.6"/>
+  <text x="130" y="382" text-anchor="middle" dominant-baseline="central" fill="#F5C4B3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14" font-weight="500">Network objects</text>
+  <text x="130" y="400" text-anchor="middle" dominant-baseline="central" fill="#F0997B" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12">from ACL permit lines</text>
+
+  <!-- Group-policy -->
+  <rect x="250" y="364" width="180" height="56" rx="8" fill="#3C3489" stroke="#AFA9EC" stroke-width="0.6"/>
+  <text x="340" y="382" text-anchor="middle" dominant-baseline="central" fill="#CECBF6" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14" font-weight="500">Group-policy</text>
+  <text x="340" y="400" text-anchor="middle" dominant-baseline="central" fill="#AFA9EC" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12">default-group-policy</text>
+</svg>`;
+
+// Sample config — each line is plain text; render() will colorize known patterns
+const SAMPLE_CONFIG_LINES = [
+  { type: 'section', text: '! ===== 1. Physical interface =====' },
+  { type: 'cfg', text: 'interface GigabitEthernet0/0' },
+  { type: 'cfg', text: ' nameif outside' },
+  { type: 'cfg', text: ' ip address 198.51.100.10 255.255.255.0' },
+  { type: 'blank' },
+  { type: 'section', text: '! ===== 2. Bind crypto map to the interface =====' },
+  { type: 'cfg', text: 'crypto map OUTSIDE_MAP interface outside', note: 'binds the map below to the physical interface' },
+  { type: 'blank' },
+  { type: 'section', text: '! ===== 3. Crypto map entry (the hub) =====' },
+  { type: 'cfg', text: 'crypto map OUTSIDE_MAP 10 match address VPN_ACL', note: 'links to the access-list' },
+  { type: 'cfg', text: 'crypto map OUTSIDE_MAP 10 set peer 203.0.113.5', note: 'links to the tunnel-group (by IP)' },
+  { type: 'cfg', text: 'crypto map OUTSIDE_MAP 10 set ikev2 ipsec-proposal AES256', note: 'links to the IPsec proposal' },
+  { type: 'blank' },
+  { type: 'section', text: '! ===== 4. Access-list (interesting traffic) =====' },
+  { type: 'cfg', text: 'access-list VPN_ACL extended permit ip object LOCAL_NET object REMOTE_NET' },
+  { type: 'blank' },
+  { type: 'section', text: '! ===== 5. Network objects (used in the ACL) =====' },
+  { type: 'cfg', text: 'object network LOCAL_NET' },
+  { type: 'cfg', text: ' subnet 10.10.0.0 255.255.0.0' },
+  { type: 'cfg', text: 'object network REMOTE_NET' },
+  { type: 'cfg', text: ' subnet 192.168.50.0 255.255.255.0' },
+  { type: 'blank' },
+  { type: 'section', text: '! ===== 6. Tunnel-group (matched by peer IP) =====' },
+  { type: 'cfg', text: 'tunnel-group 203.0.113.5 type ipsec-l2l' },
+  { type: 'cfg', text: 'tunnel-group 203.0.113.5 general-attributes' },
+  { type: 'cfg', text: ' default-group-policy GP_PEER1', note: 'links to the group-policy' },
+  { type: 'cfg', text: 'tunnel-group 203.0.113.5 ipsec-attributes' },
+  { type: 'cfg', text: ' ikev2 remote-authentication pre-shared-key REDACTED' },
+  { type: 'cfg', text: ' ikev2 local-authentication pre-shared-key REDACTED' },
+  { type: 'blank' },
+  { type: 'section', text: '! ===== 7. Group-policy (VPN attributes) =====' },
+  { type: 'cfg', text: 'group-policy GP_PEER1 internal' },
+  { type: 'cfg', text: 'group-policy GP_PEER1 attributes' },
+  { type: 'cfg', text: ' vpn-tunnel-protocol ikev2' },
+  { type: 'blank' },
+  { type: 'section', text: '! ===== 8. IPsec proposal (Phase 2 crypto) =====' },
+  { type: 'cfg', text: 'crypto ipsec ikev2 ipsec-proposal AES256' },
+  { type: 'cfg', text: ' protocol esp encryption aes-256' },
+  { type: 'cfg', text: ' protocol esp integrity sha-256' },
+  { type: 'blank' },
+  { type: 'section', text: '! ===== Supporting components (NOT owned by the tunnel) =====' },
+  { type: 'comment', text: '! Phase 1 IKE policy — global, the ASA picks one matching what the peer offers' },
+  { type: 'cfg', text: 'crypto ikev2 policy 10' },
+  { type: 'cfg', text: ' encryption aes-256' },
+  { type: 'cfg', text: ' integrity sha256' },
+  { type: 'cfg', text: ' group 14' },
+  { type: 'cfg', text: ' prf sha256' },
+  { type: 'cfg', text: ' lifetime seconds 86400' },
+  { type: 'blank' },
+  { type: 'comment', text: '! NAT exemption — must MIRROR the crypto ACL subnets exactly' },
+  { type: 'cfg', text: 'nat (inside,outside) source static LOCAL_NET LOCAL_NET destination static REMOTE_NET REMOTE_NET no-proxy-arp route-lookup' },
+  { type: 'blank' },
+  { type: 'comment', text: '! Static route — so we can reach the peer in the first place' },
+  { type: 'cfg', text: 'route outside 0.0.0.0 0.0.0.0 198.51.100.1 1' },
+];
+
+function renderSampleConfig() {
+  let html = '';
+  for (const ln of SAMPLE_CONFIG_LINES) {
+    if (ln.type === 'blank') { html += '\n'; continue; }
+    if (ln.type === 'section') {
+      html += `<span class="cfg-section">${escapeHtml(ln.text)}</span>`;
+      continue;
+    }
+    if (ln.type === 'comment') {
+      html += `<span class="cfg-comment">${escapeHtml(ln.text)}</span>\n`;
+      continue;
+    }
+    // cfg line — escape, then highlight tokens, then append optional note
+    let line = escapeHtml(ln.text);
+    // Highlight known names
+    line = line.replace(/\b(VPN_ACL|OUTSIDE_MAP|LOCAL_NET|REMOTE_NET|GP_PEER1|AES256)\b/g, '<span class="cfg-name">$1</span>');
+    // Highlight linking keywords
+    line = line.replace(/\b(match address|set peer|set ikev2 ipsec-proposal|default-group-policy|interface outside|nameif|pre-shared-key)\b/g, '<span class="cfg-link">$1</span>');
+    html += line;
+    if (ln.note) html += `   <span class="cfg-comment">! → ${escapeHtml(ln.note)}</span>`;
+    html += '\n';
+  }
+  return html;
+}
+
+function renderDiagram() {
+  const legend = `
+    <div class="legend">
+      <div class="legend-item"><span class="legend-swatch cat-gray"></span>Network plumbing</div>
+      <div class="legend-item"><span class="legend-swatch cat-teal"></span>Crypto map (the hub)</div>
+      <div class="legend-item"><span class="legend-swatch cat-coral"></span>Traffic selection</div>
+      <div class="legend-item"><span class="legend-swatch cat-purple"></span>Authentication / identity</div>
+      <div class="legend-item"><span class="legend-swatch cat-pink"></span>Phase 2 crypto</div>
+    </div>`;
+
+  const html = `
+    <h2 style="margin:0 0 12px">Component Diagram</h2>
+    <div class="hint" style="margin-bottom:12px">How the configuration pieces hook together. Arrow labels show the actual config command that creates the link. Read top→bottom: the crypto map is the hub.</div>
+    <div class="diagram-wrap">
+      ${COMPONENT_DIAGRAM_SVG}
+      ${legend}
+    </div>
+    <h2 style="margin:18px 0 8px">Annotated Sample Configuration</h2>
+    <div class="hint" style="margin-bottom:12px">A complete, working L2L tunnel showing each component from the diagram. Linking keywords are <span class="cfg-link" style="font-family:var(--mono)">highlighted</span> and named identifiers are <span class="cfg-name" style="font-family:var(--mono)">colored</span> so you can trace references by eye.</div>
+    <div class="config-sample">${renderSampleConfig()}</div>
+    <div class="hint" style="margin-top:12px">
+      <strong style="color:var(--text)">Reading order:</strong> sections 1–8 build the tunnel from the bottom up. Sections marked <em>"NOT owned by the tunnel"</em> are global — the same Phase 1 policy and the same routing table serve every tunnel on the box.
+    </div>`;
+
+  document.getElementById('componentDiagram').innerHTML = html;
+}
+
+function toggleDiagram() {
+  const d = document.getElementById('componentDiagram');
+  const btn = document.getElementById('diagToggle');
+  if (d.style.display === 'none') {
+    renderDiagram();
+    d.style.display = 'block';
+    btn.textContent = 'Hide Component Diagram';
+    btn.classList.add('active');
+  } else {
+    d.style.display = 'none';
+    btn.textContent = 'Show Component Diagram';
+    btn.classList.remove('active');
+  }
+}
+
+
+const PLAYBOOK = [
+  {
+    title: '1. Verify peer reachability',
+    why: 'IKE can\'t even start if the peer IP isn\'t reachable. This rules out the dumbest cause first.',
+    commands: [
+      'ping <PEER_IP>',
+      'show route <PEER_IP>',
+      'traceroute <PEER_IP>',
+    ],
+    expect: 'Reply received (or admin denied — peer firewall is dropping ICMP but routable). show route shows correct egress interface (usually outside).',
+    issues: [
+      { sym: 'Request timed out', fix: 'ISP issue, peer down, or peer firewall blocking. Coordinate with remote side.' },
+      { sym: 'No route to host', fix: 'Missing default/static route. Check show route 0.0.0.0.' },
+    ],
+  },
+  {
+    title: '2. Phase 1 — IKE / ISAKMP Security Association',
+    why: 'Phase 1 negotiates the secure channel between peers. No Phase 1 = no tunnel, period.',
+    commands: [
+      '! IKEv2:',
+      'show crypto ikev2 sa peer <PEER_IP>',
+      '! IKEv1:',
+      'show crypto ikev1 sa | include <PEER_IP>',
+      'show crypto isakmp sa | include <PEER_IP>',
+    ],
+    expect: 'IKEv2: state READY. IKEv1: state MM_ACTIVE (main mode) or QM_IDLE. Local + remote addresses both correct.',
+    issues: [
+      { sym: 'No SA at all', fix: 'Phase 1 never negotiated. Check Step 1, then PSK, then Phase 1 proposals.' },
+      { sym: 'MM_WAIT_MSG2', fix: 'No response from peer — peer unreachable or peer IKE not running.' },
+      { sym: 'MM_WAIT_MSG3 / MSG4', fix: 'Phase 1 proposal mismatch (encryption/hash/DH/lifetime).' },
+      { sym: 'MM_WAIT_MSG5 / MSG6', fix: 'PSK mismatch — most common cause.' },
+      { sym: 'IKEv2 stuck in IN_NEG', fix: 'Proposal or auth method mismatch. Run debug crypto ikev2 protocol 127.' },
+    ],
+  },
+  {
+    title: '3. Phase 2 — IPsec Security Association',
+    why: 'Phase 2 builds the actual data tunnel. Phase 1 up but Phase 2 down = ACL or transform mismatch.',
+    commands: [
+      'show crypto ipsec sa peer <PEER_IP>',
+      'show crypto ipsec sa peer <PEER_IP> detail',
+    ],
+    expect: 'Both inbound and outbound SPIs present. local ident and remote ident should mirror what the peer has configured (swapped).',
+    issues: [
+      { sym: 'No SA shown (Phase 1 is up)', fix: 'Proxy-ID / crypto ACL mismatch. Your ACL must be the exact mirror of the peer\'s.' },
+      { sym: 'Different transform-set on each side', fix: 'Align ESP encryption + integrity (and PFS group if used) on both peers.' },
+      { sym: 'IKEv2: TS_UNACCEPTABLE in debugs', fix: 'Same as proxy-ID mismatch — traffic selector negotiation failed.' },
+    ],
+  },
+  {
+    title: '4. Encrypt / Decrypt counters — is traffic actually flowing?',
+    why: 'Tells you which direction (if any) traffic is moving. The fastest way to localize a "tunnel up but not working" complaint.',
+    commands: [
+      'show crypto ipsec sa peer <PEER_IP> | include pkts|ident',
+      '! Reset counters and re-test:',
+      'clear crypto ipsec sa peer <PEER_IP> counters',
+    ],
+    expect: 'Both pkts encaps (outbound) and pkts decaps (inbound) increment when you generate test traffic.',
+    issues: [
+      { sym: 'encaps grows, decaps = 0', fix: 'You\'re sending, peer not returning. Remote routing/ACL/NAT issue, or asymmetric return path.' },
+      { sym: 'decaps grows, encaps = 0', fix: 'Peer sending, you not. Check local NAT exemption, routing, and that internal hosts hit the crypto ACL.' },
+      { sym: 'Both = 0', fix: 'Tunnel up but no interesting traffic. Generate test traffic; verify ACL matches the flow.' },
+      { sym: 'Both incrementing, user still complains', fix: 'Tunnel is working — issue is application-layer or end-host (firewall, app, MTU).' },
+    ],
+  },
+  {
+    title: '5. Simulate the traffic — packet-tracer',
+    why: 'ASA\'s built-in simulator walks a synthetic packet through every feature (ACL, NAT, VPN) and tells you exactly where it lands or drops.',
+    commands: [
+      'packet-tracer input <INSIDE_IFACE> tcp <LOCAL_HOST> 12345 <REMOTE_HOST> 80 detailed',
+      'packet-tracer input <INSIDE_IFACE> icmp <LOCAL_HOST> 8 0 <REMOTE_HOST> detailed',
+    ],
+    expect: 'Final Result: ALLOW. Phases include a VPN / IPsec phase that says "encrypt".',
+    issues: [
+      { sym: 'Drop reason: nat-no-xlate-to-pat-pool or similar', fix: 'NAT translating before VPN — add NAT exemption rule.' },
+      { sym: 'Drop reason: acl-drop', fix: 'An ACL is blocking on the input interface — check inside ACL.' },
+      { sym: 'No VPN/encrypt phase appears', fix: 'Traffic doesn\'t match the crypto ACL — verify subnets/protocols in the ACL.' },
+      { sym: 'Phase says "encrypt" but Result = DROP', fix: 'Tunnel exists but isn\'t up — go back to Steps 2–3.' },
+    ],
+  },
+  {
+    title: '6. NAT exemption verification',
+    why: 'Without NAT exemption, internal addresses get translated and never match the crypto ACL. Most common silent failure.',
+    commands: [
+      'show running-config nat | include <LOCAL_SUBNET>',
+      'show nat detail | begin <LOCAL_SUBNET>',
+      'show nat detail | include <REMOTE_SUBNET>',
+    ],
+    expect: 'A "nat (inside,outside) source static LOCAL LOCAL destination static REMOTE REMOTE" rule, with hit count > 0, sitting BEFORE any general PAT.',
+    issues: [
+      { sym: 'No matching exempt rule', fix: 'Add: nat (inside,outside) 1 source static LOCAL_NET LOCAL_NET destination static REMOTE_NET REMOTE_NET no-proxy-arp route-lookup' },
+      { sym: 'Rule exists but hit count = 0', fix: 'Wrong order or wrong objects. Use packet-tracer to confirm which NAT rule actually matches.' },
+      { sym: 'Twice-NAT (post-9.x) sitting after auto-NAT', fix: 'Move the exempt rule to a lower line number / earlier in section 1.' },
+    ],
+  },
+  {
+    title: '7. Routing — peer and remote subnets',
+    why: 'Even a perfect tunnel won\'t pass traffic if return packets don\'t know where to go.',
+    commands: [
+      'show route <PEER_IP>',
+      'show route <REMOTE_SUBNET>',
+      'show running-config route',
+    ],
+    expect: 'Peer reachable via WAN interface. For crypto-map L2L, the remote subnet doesn\'t need its own route (the crypto ACL handles it). For VTI tunnels, remote subnet MUST route via the Tunnel interface.',
+    issues: [
+      { sym: 'Route to peer via wrong interface', fix: 'Static route or metric problem — fix routing.' },
+      { sym: 'VTI: no route to remote subnet via Tunnel int', fix: 'Add static route or BGP/OSPF over the tunnel.' },
+    ],
+  },
+  {
+    title: '7b. Asymmetric routing & return-path verification',
+    why: 'When traffic goes one way through the tunnel but returns via a different path. Classic symptoms: tunnel is "up" but applications hang, ICMP works but TCP doesn\'t, or only one direction of a flow makes it through.',
+    commands: [
+      '! Confirm only ONE best route exists for the remote subnet:',
+      'show route <REMOTE_SUBNET>',
+      '! Dataplane drops — look for reverse-path / asymmetric issues:',
+      'show asp drop',
+      'show asp drop frame rpf-violated',
+      '! Active connections and which interfaces they\'re on:',
+      'show conn address <REMOTE_HOST>',
+      'show conn long detail address <REMOTE_HOST>',
+      '! Live capture on both sides — proves which direction packets actually take:',
+      'capture CAP_IN  interface <INSIDE_IFACE> match ip host <LOCAL_HOST> host <REMOTE_HOST>',
+      'capture CAP_OUT interface outside        match ip host <LOCAL_HOST> host <REMOTE_HOST>',
+      'show capture CAP_IN',
+      'show capture CAP_OUT',
+      '! ALWAYS clean up captures when done (they consume memory):',
+      'no capture CAP_IN',
+      'no capture CAP_OUT',
+      '! Check if uRPF (reverse-path forwarding) is on — strict mode causes asym drops:',
+      'show running-config | include ip verify reverse-path',
+    ],
+    expect: 'Single best route per subnet. asp drop counters for rpf-violated NOT incrementing. CAP_IN and CAP_OUT both show packets for the same flow in matching directions.',
+    issues: [
+      { sym: 'asp drop: Reverse-path verify failed', fix: 'uRPF strict mode + asymmetric routing. Fix the routing, or change uRPF to loose mode, or disable on that interface.' },
+      { sym: 'CAP_IN shows traffic, CAP_OUT does not', fix: 'Outbound side not sending — likely NAT translation, missing route, or wrong crypto map matching.' },
+      { sym: 'CAP_OUT shows traffic, CAP_IN does not', fix: 'Return packets reaching ASA but not making it inside — check inside ACL, internal routing, or the destination host.' },
+      { sym: 'Multiple equal-cost routes for the remote subnet', fix: 'ECMP can hash flows to different egress paths. Remove a route or use a floating static to pin direction.' },
+      { sym: 'Connection in "show conn" stuck half-open / embryonic', fix: 'TCP handshake started but didn\'t complete — usually return-path missing or one-way drop.' },
+      { sym: 'ICMP works but TCP/UDP fails for same hosts', fix: 'Stateful inspection sees only one side of the flow. Almost always asymmetric routing.' },
+    ],
+  },
+  {
+    title: '8. Logs — let the ASA tell you what failed',
+    why: 'ASA logs every IKE/IPsec event. Filtering by peer IP gives you a chronological story.',
+    commands: [
+      'show logging | include <PEER_IP>',
+      'show logging | include 713',
+      '! Useful syslog IDs:',
+      '!  %ASA-5-713201  PSK auth failure',
+      '!  %ASA-3-713902  Phase 2 transform mismatch',
+      '!  %ASA-4-713903  Phase 1 proposal mismatch',
+      '!  %ASA-6-602303  IPsec SA created',
+      '!  %ASA-6-602304  IPsec SA torn down',
+      '!  %ASA-6-713905  Authentication successful',
+    ],
+    expect: 'A clear sequence: peer initiates → IKE_SA_INIT → IKE_AUTH → CHILD_SA created. Any 3- or 4-level message points directly at the cause.',
+    issues: [],
+  },
+  {
+    title: '8b. Historical events — config changes, tunnel flaps, stability',
+    why: 'Most "it worked yesterday" tickets are answered by the log. Find when it last went down, how often it\'s flapping, and whether anyone touched the config recently.',
+    commands: [
+      '! Tunnel up/down events for THIS peer:',
+      'show logging | include <PEER_IP>',
+      'show logging | include 602303    ! IPsec SA created',
+      'show logging | include 602304    ! IPsec SA torn down',
+      '! Count flap events to gauge instability — many pairs in a short window = flapping:',
+      'show logging | include <PEER_IP> | include 602303|602304',
+      '! Configuration commands that ran (who changed what, when):',
+      'show logging | include 111008    ! User executed command',
+      'show logging | include 111010    ! Config change committed',
+      '! Last device reload reason — useful if "it just stopped":',
+      'show logging | include 199003',
+      'show version | include up',
+      '! Current SA uptime — short uptime + no maintenance window = recent rebuild:',
+      'show vpn-sessiondb detail l2l | include <PEER_IP>',
+      'show crypto ipsec sa peer <PEER_IP> | include uptime|setting|lifetime',
+      '! IKE-specific events for this peer:',
+      'show logging | include <PEER_IP> | include 713|750|751',
+      '! Verify logging is actually being captured (and going somewhere durable):',
+      'show running-config logging',
+      'show logging setting',
+    ],
+    expect: 'Healthy tunnel: long SA uptime matching configured lifetime (e.g. 8h or 24h). No recent 602304 events. No recent 111008/111010 entries touching crypto / tunnel-group / access-list near the failure timestamp.',
+    issues: [
+      { sym: 'Repeating 602303/602304 pairs every few minutes', fix: 'Tunnel is flapping. Top causes: DPD timeout (peer not responding to keepalives), MTU/fragmentation, ISP path instability, mismatched lifetimes triggering rekey loops.' },
+      { sym: '111008/111010 entries close to the reported failure time', fix: 'Someone changed config — review the command. AAA command accounting (if enabled) tells you which user.' },
+      { sym: 'SA uptime resets every few hours when lifetime is 24h', fix: 'Forced rekey or one side tearing down early. Check both sides\' lifetime values match exactly.' },
+      { sym: 'Logging buffer too small to see history', fix: 'Increase: logging buffered informational + logging buffer-size 1048576. Better: send to syslog server for permanent record.' },
+      { sym: 'No 602303/602304 in logs at all', fix: 'Logging level too low (need informational/6 or higher) or VPN events filtered out. Check logging configuration.' },
+      { sym: 'Only one side of the tunnel shows flap events', fix: 'The other side is the initiator of teardown — investigate the peer rather than this ASA.' },
+    ],
+  },
+  {
+    title: '9. Real-time debug — when "show" isn\'t enough',
+    why: 'Live IKE negotiation. Last resort because of CPU impact — always scope to one peer first.',
+    commands: [
+      '! ALWAYS scope first — without this, debug is global:',
+      'debug crypto condition peer <PEER_IP>',
+      '! IKEv2:',
+      'debug crypto ikev2 protocol 127',
+      'debug crypto ikev2 platform 127',
+      '! IKEv1:',
+      'debug crypto isakmp 127',
+      'debug crypto ipsec 127',
+      'terminal monitor   ! see output if you\'re on SSH',
+      '! When done — DO NOT FORGET:',
+      'undebug all',
+      'no debug crypto condition peer <PEER_IP>',
+    ],
+    expect: 'IKE message exchange visible. Errors call out exact reason (TS_UNACCEPTABLE, NO_PROPOSAL_CHOSEN, AUTH_FAILED, etc.).',
+    issues: [
+      { sym: 'AUTHENTICATION_FAILED', fix: 'PSK mismatch (or cert validation issue if PKI).' },
+      { sym: 'TS_UNACCEPTABLE', fix: 'Traffic selector / proxy-ID mismatch — fix crypto ACL on one side.' },
+      { sym: 'NO_PROPOSAL_CHOSEN', fix: 'Crypto proposal mismatch — Phase 1 or Phase 2 depending on where it appears.' },
+      { sym: 'INVALID_KE_PAYLOAD', fix: 'DH group mismatch — peers don\'t share a common Diffie-Hellman group.' },
+    ],
+  },
+  {
+    title: '10. Force a clean re-negotiation',
+    why: 'After config changes, an existing stale SA can mask the fix. Tear it down and let it rebuild.',
+    commands: [
+      'clear crypto ikev2 sa peer <PEER_IP>',
+      'clear crypto ikev1 sa peer <PEER_IP>',
+      'clear crypto ipsec sa peer <PEER_IP>',
+      '! Then send interesting traffic to trigger rebuild.',
+    ],
+    expect: 'SAs disappear from show output, then re-appear within a few seconds when traffic flows.',
+    issues: [],
+  },
+];
+
+const COMMON_ISSUES = [
+  { title: 'PSK mismatch', sym: 'Phase 1 fails at MSG5/6 (IKEv1) or AUTH (IKEv2).', fix: 'Re-enter the PSK on both sides identically. Watch for trailing spaces, case differences, and special chars that some terminals mangle.' },
+  { title: 'Phase 1 proposal mismatch', sym: 'Phase 1 stuck in MM_WAIT_MSG3/4 or IKEv2 IN_NEG.', fix: 'Compare crypto ikev1/ikev2 policy on both sides — encryption, integrity/hash, DH group, PRF, lifetime must overlap.' },
+  { title: 'Phase 2 proxy-ID / crypto ACL mismatch', sym: 'Phase 1 up, no Phase 2 SA. IKEv2 debug shows TS_UNACCEPTABLE.', fix: 'Crypto ACL on each side must mirror the other (your local = peer\'s remote and vice versa). Avoid summary subnets unless both sides agree.' },
+  { title: 'Phase 2 transform / IPsec proposal mismatch', sym: 'Phase 2 fails with NO_PROPOSAL_CHOSEN.', fix: 'Match ESP encryption + integrity on both peers. Also align PFS group if either side requires it.' },
+  { title: 'Missing NAT exemption', sym: 'Tunnel up, encaps stays at 0 even when generating traffic.', fix: 'Add a NAT exempt rule for the VPN flow, placed before any general PAT. Use packet-tracer to confirm it hits.' },
+  { title: 'Asymmetric routing on remote side', sym: 'encaps grows steadily, decaps stays 0.', fix: 'Remote receives but reply takes a different path. Coordinate with remote admin — they likely lack NAT exemption or a return route.' },
+  { title: 'DPD / idle timeout', sym: 'Tunnel works initially, drops after 10–60 minutes of inactivity.', fix: 'Tune isakmp keepalive (IKEv1) or ikev2 dpd. Or schedule periodic keepalive traffic across the tunnel.' },
+  { title: 'MTU / fragmentation', sym: 'Pings work, large transfers (HTTPS, file copy) hang or fail mid-stream.', fix: 'IPsec adds overhead — packets > MTU get fragmented or dropped. Lower tunnel MTU or apply TCP-MSS adjust on the inside interface (e.g., sysopt connection tcpmss 1350).' },
+  { title: 'Crypto map ACL using wrong direction', sym: 'New tunnel never establishes Phase 2.', fix: 'Crypto ACL is "local subnet → remote subnet". A common error is reversing it or mixing in NAT-translated addresses.' },
+  { title: 'Overlapping crypto map sequence numbers', sym: 'Random tunnel takes precedence; the wrong peer answers.', fix: 'Each crypto map sequence on the same map name must be unique and ordered. Lower seq = higher priority.' },
+];
+
+function fillTemplate(cmd, ctx) {
+  return cmd
+    .replace(/<PEER_IP>/g, ctx.peer || '<PEER_IP>')
+    .replace(/<LOCAL_SUBNET>/g, ctx.localSubnet || '<LOCAL_SUBNET>')
+    .replace(/<REMOTE_SUBNET>/g, ctx.remoteSubnet || '<REMOTE_SUBNET>')
+    .replace(/<LOCAL_HOST>/g, ctx.localHost || '<LOCAL_HOST>')
+    .replace(/<REMOTE_HOST>/g, ctx.remoteHost || '<REMOTE_HOST>')
+    .replace(/<INSIDE_IFACE>/g, ctx.insideIface || 'inside');
+}
+
+function buildContext(lastRes) {
+  if (!lastRes) return {};
+  const ctx = { peer: lastRes.anchor, insideIface: 'inside' };
+  // Try to extract local/remote subnets from first ACL line
+  const acl = (lastRes.res.accessList || [])[0];
+  if (acl) {
+    const ips = acl.header.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g) || [];
+    if (ips.length >= 4) {
+      ctx.localSubnet = ips[0];
+      ctx.remoteSubnet = ips[2];
+      ctx.localHost = ips[0];
+      ctx.remoteHost = ips[2];
+    } else if (ips.length >= 2) {
+      ctx.localHost = ips[0];
+      ctx.remoteHost = ips[1];
+    }
+  }
+  return ctx;
+}
+
+function renderPlaybook(ctx) {
+  const filled = ctx && ctx.peer;
+  let html = `<div class="pane-header"><h2 style="margin:0">Troubleshooting Playbook${filled ? ' · ' + escapeHtml(ctx.peer) : ''}</h2>`;
+  if (lastResult && !filled) {
+    html += `<button class="ts-fill-btn" onclick="renderPlaybookForLast()">Fill for ${escapeHtml(lastResult.anchor)}</button>`;
+  } else if (filled) {
+    html += `<button class="ts-fill-btn" onclick="renderPlaybook(null)">Show generic</button>`;
+  }
+  html += `</div>`;
+  html += `<div class="hint" style="margin-bottom:14px">${filled
+    ? 'Commands below have placeholders replaced with this tunnel\'s actual values. Click any command to copy it.'
+    : 'Generic commands with placeholders. Run an analysis first, then click "Fill for…" to substitute real values.'}</div>`;
+
+  for (const step of PLAYBOOK) {
+    html += `<div class="ts-step">
+      <div class="ts-title">${escapeHtml(step.title)}</div>
+      <div class="ts-why">${escapeHtml(step.why)}</div>
+      <div class="ts-cmds">`;
+    for (const cmd of step.commands) {
+      const final = filled ? fillTemplate(cmd, ctx) : cmd;
+      const isComment = /^\s*!/.test(final);
+      const stillUnfilled = /<[A-Z_]+>/.test(final);
+      if (isComment) {
+        html += `<div class="ts-cmd" style="cursor:default;color:var(--text-dim)"><span>${escapeHtml(final)}</span></div>`;
+      } else {
+        html += `<div class="ts-cmd ${stillUnfilled ? 'unfilled' : ''}" onclick="copyCmd(this)"><span>${escapeHtml(final)}</span><span class="copy-ind">copy</span></div>`;
+      }
+    }
+    html += `</div>`;
+    if (step.expect) html += `<div class="ts-expect"><strong>Expect:</strong> ${escapeHtml(step.expect)}</div>`;
+    if (step.issues && step.issues.length) {
+      html += `<div class="ts-issues"><strong>If you see…</strong><ul>`;
+      for (const iss of step.issues) html += `<li><code>${escapeHtml(iss.sym)}</code> → ${escapeHtml(iss.fix)}</li>`;
+      html += `</ul></div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Common issues quick-reference
+  html += `<div class="ts-step"><div class="ts-title">Common issues — quick reference</div>
+    <div class="ts-issues" style="color:var(--text)"><ul style="padding-left:18px">`;
+  for (const ci of COMMON_ISSUES) {
+    html += `<li style="margin-bottom:8px"><strong style="color:var(--accent);text-transform:none;letter-spacing:0;display:inline;font-size:12.5px">${escapeHtml(ci.title)}</strong> — <span style="color:var(--text-dim)">${escapeHtml(ci.sym)}</span><br><em style="color:var(--text)">→ ${escapeHtml(ci.fix)}</em></li>`;
+  }
+  html += `</ul></div></div>`;
+
+  document.getElementById('troubleshooting').innerHTML = html;
+}
+
+function renderPlaybookForLast() {
+  if (!lastResult) return;
+  renderPlaybook(buildContext(lastResult));
+}
+
+function toggleTroubleshooting() {
+  const ts = document.getElementById('troubleshooting');
+  const btn = document.getElementById('tsToggle');
+  if (ts.style.display === 'none') {
+    // Render with current context if available
+    const ctx = lastResult ? buildContext(lastResult) : null;
+    renderPlaybook(ctx);
+    ts.style.display = 'block';
+    btn.textContent = 'Hide Troubleshooting Steps';
+    btn.classList.add('active');
+  } else {
+    ts.style.display = 'none';
+    btn.textContent = 'Show Troubleshooting Steps';
+    btn.classList.remove('active');
+  }
+}
+
+// ---------- Operational Commands Reference ----------
+const OPS_COMMANDS = [
+  {
+    category: 'Routing',
+    why: 'Verify reachability, paths, and route source — critical when traffic is hitting the wrong egress or VPN.',
+    commands: [
+      { cmd: 'show route', desc: 'Full routing table (RIB) — codes column shows source (S=static, C=connected, O=OSPF, B=BGP, V=VPN-injected reverse-route)' },
+      { cmd: 'show route <destination-ip>', desc: 'Recursive lookup — shows which route ASA will use for a specific IP, plus next-hop and egress interface' },
+      { cmd: 'show route summary', desc: 'Counts by source protocol; quick sanity check for unexpected route counts' },
+      { cmd: 'show route static', desc: 'Only static routes (useful when SLA-tracked routes flip)' },
+      { cmd: 'show route ospf', desc: 'OSPF-learned routes only' },
+      { cmd: 'show route bgp', desc: 'BGP-learned routes only' },
+      { cmd: 'show route management-only', desc: 'Routes in the management VRF' },
+      { cmd: 'show ospf neighbor', desc: 'OSPF adjacency state (FULL = healthy)' },
+      { cmd: 'show ospf database', desc: 'Full LSDB — for advanced OSPF debugging' },
+      { cmd: 'show bgp summary', desc: 'BGP peer states and prefix counts' },
+      { cmd: 'show bgp neighbors <peer-ip>', desc: 'Detailed BGP peer info, timers, capabilities' }
+    ]
+  },
+  {
+    category: 'High Availability (Failover)',
+    why: 'Confirm HA pair health, sync state, and which unit is active — first thing to check during instability.',
+    commands: [
+      { cmd: 'show failover', desc: 'Full HA status — primary/secondary, active/standby, last switchover, monitored interface states' },
+      { cmd: 'show failover state', desc: 'Compact: just this unit and peer state' },
+      { cmd: 'show failover history', desc: 'Chronological list of all HA state transitions with reason codes — the FIRST place to look after an unexpected failover' },
+      { cmd: 'show failover interface', desc: 'Failover (LAN) and stateful (state) link details and IPs' },
+      { cmd: 'show failover descriptor', desc: 'Per-interface MAC and config-sync info' },
+      { cmd: 'show running-config failover', desc: 'HA configuration — group ID, keys, interface monitoring, polltime' },
+      { cmd: 'failover active', desc: 'Manually make this unit Active (run on the standby)' },
+      { cmd: 'no failover active', desc: 'Manually make this unit Standby (run on the active)' },
+      { cmd: 'failover reload-standby', desc: 'Reload the standby unit only (useful for forcing config-sync recovery)' },
+      { cmd: 'write standby', desc: 'Force config replication from active to standby (use sparingly)' },
+      { cmd: 'show conn count', desc: 'Concurrent connections — should match closely between active and standby if stateful failover is healthy' }
+    ]
+  },
+  {
+    category: 'Failover Logs & Debug',
+    why: 'When HA flipped and you need WHY — debug + syslog filtering for failover events.',
+    commands: [
+      { cmd: 'show logging | include FAILOVER|failover', desc: 'Pull all failover-related syslogs from the buffer' },
+      { cmd: 'show logging | include 411|105|710', desc: 'Failover-related syslog ID prefixes (411xxx interface events, 105xxx HA, 710xxx access-list hits)' },
+      { cmd: 'show logging asdm', desc: 'ASDM event log (often retains failover events when buffer rolled)' },
+      { cmd: 'show failover history | include Active|Standby|Failed', desc: 'Highlight only state-change rows' },
+      { cmd: 'debug fover cable', desc: 'Real-time failover cable/link events (use cautiously)' },
+      { cmd: 'debug fover fail', desc: 'Failover decision-making debug — shows why a switchover was triggered' },
+      { cmd: 'debug fover sync', desc: 'Config and state replication debug' },
+      { cmd: 'debug fover ifc', desc: 'Interface-monitoring debug (which monitored interfaces failed and triggered HA)' },
+      { cmd: 'undebug all', desc: 'TURN OFF all debugs when finished — critical, debug output can starve the dataplane' },
+      { cmd: 'show debug', desc: 'List all currently-enabled debugs' }
+    ]
+  },
+  {
+    category: 'Interface Monitoring',
+    why: 'Confirm which interfaces are monitored for HA and which links are healthy. A single monitored-interface failure can trigger HA.',
+    commands: [
+      { cmd: 'show monitor-interface', desc: 'Lists every monitored interface, its state (Normal / Testing / Failed / No Link), and whether it counts toward HA failover threshold' },
+      { cmd: 'show failover interface', desc: 'Cross-check: confirms which interfaces are in the HA monitor list' },
+      { cmd: 'show interface ip brief', desc: 'Quick up/down per interface' },
+      { cmd: 'show interface <name>', desc: 'Detailed interface state — counters, errors, duplex, speed' },
+      { cmd: 'show interface <name> | include error|drop|rate', desc: 'Filter for problem indicators' },
+      { cmd: 'show traffic', desc: 'Per-interface pps/bps rates (1-min and 5-min averages)' },
+      { cmd: 'monitor-interface <name>', desc: 'Add an interface to HA monitoring (config mode)' },
+      { cmd: 'no monitor-interface <name>', desc: 'Remove from HA monitoring' }
+    ]
+  },
+  {
+    category: 'Connections & NAT',
+    why: 'Verify session state, NAT translation, and that traffic is hitting the expected rules.',
+    commands: [
+      { cmd: 'show conn', desc: 'All active connections' },
+      { cmd: 'show conn address <ip>', desc: 'Connections touching a specific IP (src OR dst)' },
+      { cmd: 'show conn port <port>', desc: 'Connections on a specific port' },
+      { cmd: 'show conn long detail address <ip>', desc: 'Detailed conn record incl. flags, NAT info, idle/duration' },
+      { cmd: 'show xlate', desc: 'NAT translation table' },
+      { cmd: 'show xlate detail | include <ip>', desc: 'Translations involving a specific IP' },
+      { cmd: 'show xlate count', desc: 'Total xlate count (watch for leaks / approaching limits)' },
+      { cmd: 'show nat detail', desc: 'NAT rules + hit counts — tells you which rule matched what traffic' },
+      { cmd: 'show nat translated', desc: 'NAT rules that have active translations' },
+      { cmd: 'clear xlate', desc: 'CAUTION — drops all NAT translations (resets all sessions). Use during planned change only' }
+    ]
+  },
+  {
+    category: 'Packet Tracer & Capture',
+    why: 'Simulate a packet through the ASA pipeline (ACL → NAT → route → VPN) without sending real traffic, or capture live traffic.',
+    commands: [
+      { cmd: 'packet-tracer input <iface> tcp <src-ip> 12345 <dst-ip> <dst-port> detailed', desc: 'TCP simulation — shows every phase: ACL, NAT, IPsec, route, output interface' },
+      { cmd: 'packet-tracer input <iface> udp <src-ip> 12345 <dst-ip> <dst-port> detailed', desc: 'UDP simulation' },
+      { cmd: 'packet-tracer input <iface> icmp <src-ip> 8 0 <dst-ip>', desc: 'ICMP echo simulation (type 8, code 0)' },
+      { cmd: 'capture CAP interface <iface> match ip host <src-ip> host <dst-ip>', desc: 'Bidirectional capture between two hosts on an interface' },
+      { cmd: 'capture CAP interface <iface> match tcp host <src-ip> any eq <port>', desc: 'TCP-specific capture with port filter' },
+      { cmd: 'capture CAP-DROP type asp-drop all', desc: 'Capture ALL packets dropped by the accelerated security path (incredibly useful for "why is it dropping?")' },
+      { cmd: 'show capture CAP', desc: 'View captured packets summary' },
+      { cmd: 'show capture CAP detail', desc: 'Full packet headers + payload' },
+      { cmd: 'show capture CAP-DROP | include <ip>', desc: 'Filter ASP-drop capture for a specific IP' },
+      { cmd: 'no capture CAP', desc: 'Remove capture (don\'t leave captures running)' },
+      { cmd: 'clear capture /all', desc: 'Clear all captures' }
+    ]
+  },
+  {
+    category: 'VPN / Crypto Operations',
+    why: 'Complements the tunnel-explorer config view with live-state commands for IKE/IPSec sessions.',
+    commands: [
+      { cmd: 'show crypto isakmp sa', desc: 'IKEv1 Phase 1 SAs' },
+      { cmd: 'show crypto ikev2 sa', desc: 'IKEv2 Phase 1 SAs' },
+      { cmd: 'show crypto ikev2 sa detail', desc: 'IKEv2 detail — encryption, integrity, DH group, lifetimes, child SAs' },
+      { cmd: 'show crypto ipsec sa peer <peer-ip>', desc: 'IPsec (Phase 2) SAs for a specific peer — encaps/decaps counters, SPIs' },
+      { cmd: 'show crypto ipsec sa peer <peer-ip> detail', desc: 'Detailed Phase 2 incl. errors, rekey times' },
+      { cmd: 'show vpn-sessiondb l2l', desc: 'All site-to-site (L2L) VPN sessions overview' },
+      { cmd: 'show vpn-sessiondb detail l2l filter ipaddress <peer-ip>', desc: 'Detailed session for one peer — bytes, packets, duration' },
+      { cmd: 'show vpn-sessiondb anyconnect', desc: 'AnyConnect / RA-VPN sessions' },
+      { cmd: 'clear crypto isakmp sa <peer-ip>', desc: 'Tear down IKEv1 P1 for a peer (forces re-negotiation)' },
+      { cmd: 'clear crypto ikev2 sa <peer-ip>', desc: 'Tear down IKEv2 P1 for a peer' },
+      { cmd: 'clear crypto ipsec sa peer <peer-ip>', desc: 'Tear down P2 SAs for a peer' },
+      { cmd: 'debug crypto ikev2 protocol 127', desc: 'IKEv2 protocol debug (very verbose — use with tight filter)' },
+      { cmd: 'debug crypto condition peer <peer-ip>', desc: 'Scope all crypto debugs to a single peer — ESSENTIAL before enabling debugs in production' },
+      { cmd: 'show crypto condition', desc: 'View active debug conditions' },
+      { cmd: 'clear crypto condition', desc: 'Remove all debug conditions' }
+    ]
+  },
+  {
+    category: 'System Health',
+    why: 'CPU/memory/process pressure can manifest as routing flaps or HA events.',
+    commands: [
+      { cmd: 'show cpu usage', desc: '5-sec / 1-min / 5-min CPU averages' },
+      { cmd: 'show cpu detail', desc: 'Per-core CPU + process breakdown' },
+      { cmd: 'show processes cpu-usage non-zero sorted', desc: 'Which process is burning CPU' },
+      { cmd: 'show memory', desc: 'Free / used memory' },
+      { cmd: 'show memory detail', desc: 'Pool breakdown — for leak hunting' },
+      { cmd: 'show resource usage', desc: 'Conn / xlate / host / inspect counts vs configured limits' },
+      { cmd: 'show version', desc: 'Image, uptime, hardware, license' },
+      { cmd: 'show inventory', desc: 'Hardware inventory (chassis, modules, SFPs)' },
+      { cmd: 'show environment', desc: 'PSU / fan / temperature' },
+      { cmd: 'show tech-support', desc: 'Massive bundle — when opening a TAC case, paste this output' }
+    ]
+  },
+  {
+    category: 'Logging & Syslog',
+    why: 'Confirm logs are flowing, filter for events of interest, and validate syslog destinations.',
+    commands: [
+      { cmd: 'show logging', desc: 'Logging buffer config + recent events' },
+      { cmd: 'show logging | include <pattern>', desc: 'Filter by pattern (e.g. denied, FAILOVER, peer-ip)' },
+      { cmd: 'show logging setting', desc: 'Just the logging config (levels, destinations)' },
+      { cmd: 'show logging queue', desc: 'Backlog of messages — non-zero suggests syslog destination is slow/unreachable' },
+      { cmd: 'clear logging buffer', desc: 'Clear internal log buffer (does NOT affect remote syslog)' },
+      { cmd: 'show running-config logging', desc: 'Full logging config — destinations, levels, message lists' }
+    ]
+  }
+];
+
+function renderOpsCommands(ctx) {
+  const filled = ctx && ctx.peer;
+  let html = `<div class="pane-header"><h2 style="margin:0">ASA Operational Commands${filled ? ' · ' + escapeHtml(ctx.peer) : ''}</h2>`;
+  if (lastResult && !filled) {
+    html += `<button class="ts-fill-btn" onclick="renderOpsCommandsForLast()">Fill for ${escapeHtml(lastResult.anchor)}</button>`;
+  } else if (filled) {
+    html += `<button class="ts-fill-btn" onclick="renderOpsCommands(null)">Show generic</button>`;
+  }
+  html += `</div>`;
+  html += `<div class="hint" style="margin-bottom:14px">${filled
+    ? 'Where applicable, &lt;peer-ip&gt; placeholders are auto-filled with this tunnel\'s peer. Click any command to copy.'
+    : 'Reference of live operational commands for Cisco ASA. Click any command to copy. Run an analysis to auto-fill peer IPs.'}</div>`;
+
+  for (const cat of OPS_COMMANDS) {
+    html += `<div class="ts-step">
+      <div class="ts-title">${escapeHtml(cat.category)}</div>
+      <div class="ts-why">${escapeHtml(cat.why)}</div>
+      <div class="ts-cmds">`;
+    for (const item of cat.commands) {
+      let cmd = item.cmd;
+      if (filled) cmd = cmd.replace(/<peer-ip>/g, ctx.peer);
+      const stillUnfilled = /<[a-z-]+>/i.test(cmd);
+      html += `<div class="ts-cmd ${stillUnfilled ? 'unfilled' : ''}" onclick="copyCmd(this)"><span>${escapeHtml(cmd)}</span><span class="copy-ind">copy</span></div>`;
+      html += `<div style="font-size:11.5px;color:var(--text-dim);margin:-4px 0 6px 8px;line-height:1.45">${escapeHtml(item.desc)}</div>`;
+    }
+    html += `</div></div>`;
+  }
+
+  document.getElementById('opsCommands').innerHTML = html;
+}
+
+function renderOpsCommandsForLast() {
+  if (!lastResult) return;
+  renderOpsCommands(buildContext(lastResult));
+}
+
+function toggleOpsCommands() {
+  const ops = document.getElementById('opsCommands');
+  const btn = document.getElementById('opsToggle');
+  if (ops.style.display === 'none') {
+    const ctx = lastResult ? buildContext(lastResult) : null;
+    renderOpsCommands(ctx);
+    ops.style.display = 'block';
+    btn.textContent = 'Hide Operational Commands';
+    btn.classList.add('active');
+  } else {
+    ops.style.display = 'none';
+    btn.textContent = 'Show Operational Commands';
+    btn.classList.remove('active');
+  }
+}
+
+function copyCmd(el) {
+  const text = el.querySelector('span').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    el.classList.add('copied');
+    el.querySelector('.copy-ind').textContent = '✓ copied';
+    setTimeout(() => {
+      el.classList.remove('copied');
+      el.querySelector('.copy-ind').textContent = 'copy';
+    }, 1200);
+  }).catch(() => {
+    // Fallback for non-secure contexts
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    el.querySelector('.copy-ind').textContent = '✓';
+  });
+}
+
+
+
+function setStatus(msg, isErr) {
+  const el = document.getElementById('fileStatus');
+  el.textContent = msg || '';
+  el.style.color = isErr ? 'var(--err)' : 'var(--text-dim)';
+}
+
+function ingestText(text, sourceName) {
+  loadedConfigText = text;
+  const ta = document.getElementById('config');
+  const sizeKB = (text.length / 1024).toFixed(1);
+  if (text.length > 500 * 1024) {
+    // Don't try to render multi-MB into the textarea; show a placeholder
+    ta.value = `[ ${sourceName || 'file'} loaded — ${sizeKB} KB, ${text.split(/\r?\n/).length.toLocaleString()} lines ]\n\n(Full text held in memory; not shown here to keep the editor responsive. Click Analyze.)`;
+  } else {
+    ta.value = text;
+  }
+  setStatus(`Loaded ${sourceName || 'config'} — ${sizeKB} KB`);
+}
+
+function loadFile(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  setStatus(`Reading ${f.name}…`);
+  const reader = new FileReader();
+  reader.onload = e => ingestText(e.target.result, f.name);
+  reader.onerror = () => setStatus(`Failed to read ${f.name}`, true);
+  reader.readAsText(f);
+  ev.target.value = '';  // allow re-selecting the same file
+}
+
+// Drag & drop on the input pane
+const inputPane = document.querySelector('main .pane');
+['dragover', 'dragenter'].forEach(ev => inputPane.addEventListener(ev, e => {
+  e.preventDefault(); inputPane.style.outline = '2px dashed var(--accent)';
+}));
+['dragleave', 'drop'].forEach(ev => inputPane.addEventListener(ev, e => {
+  e.preventDefault(); inputPane.style.outline = 'none';
+}));
+inputPane.addEventListener('drop', e => {
+  const f = e.dataTransfer.files[0];
+  if (!f) return;
+  setStatus(`Reading ${f.name}…`);
+  const reader = new FileReader();
+  reader.onload = ev => ingestText(ev.target.result, f.name);
+  reader.readAsText(f);
+});
+
+// If user types/pastes into textarea directly, treat that as the source
+document.getElementById('config').addEventListener('input', () => {
+  const v = document.getElementById('config').value;
+  // If they edited away from a "loaded file" placeholder, drop the cached text
+  if (!v.startsWith('[ ') || !v.includes('loaded —')) {
+    loadedConfigText = null;
+  }
+});
+
+// Enter key triggers analyze
+document.getElementById('anchor').addEventListener('keydown', e => {
+  if (e.key === 'Enter') analyze();
+});
+</script>
+</body>
+</html>
